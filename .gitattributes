@@ -1,0 +1,15 @@
+# Normalize text in Git; Linux build inputs must retain LF line endings.
+* text=auto
+*.c text eol=lf
+*.h text eol=lf
+*.s text eol=lf
+*.ld text eol=lf
+*.sh text eol=lf
+*.conf text eol=lf
+*.example text eol=lf
+*.cfg text eol=lf
+*.md text eol=lf
+Makefile text eol=lf
+*.png binary
+*.jpg binary
+*.pdf binary

@@ -1,0 +1,26 @@
+# Generated firmware, objects, dependency files, and linker maps
+/build/
+
+# Machine-specific toolchain location
+/toolchain.local.conf
+
+# Local agent/runtime directories
+/.agents/
+/.codex/
+/.aws/
+
+# Editor caches and recovery files; shared .vscode files can be tracked later
+/.idea/
+/.metadata/
+*.swp
+*.swo
+*~
+
+# Local environment, logs, and OS metadata
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+Desktop.ini
