@@ -26,13 +26,19 @@ int main(void)
 	CAN1_Init();
 	CAN_Filter_Config();
 
+	if(HAL_CAN_ActivateNotification(&hcan1,CAN_IT_TX_MAILBOX_EMPTY | CAN_IT_RX_FIFO0_MSG_PENDING |CAN_IT_BUSOFF) != HAL_OK)
+	{
+		Error_handler();
+	}
+
 	if( HAL_CAN_Start(&hcan1) != HAL_OK)
 	{
 		Error_handler();
 	}
 
 	CAN1_Tx();
-	CAN1_Rx();
+	
+	//CAN1_Rx();
 
 	while(1);
 
@@ -132,7 +138,7 @@ void SystemClock_Config_HSE(uint8_t clock_freq)
   */
 void CAN1_Tx(void)
 {
-	char msg[50];
+	//char msg[50];
 
 	CAN_TxHeaderTypeDef TxHeader;
 
@@ -150,10 +156,13 @@ void CAN1_Tx(void)
 		Error_handler();
 	}
 
-	while( HAL_CAN_IsTxMessagePending(&hcan1,TxMailbox));
+	//polling method to check the status of the transmission
+/* 	while( HAL_CAN_IsTxMessagePending(&hcan1,TxMailbox));
 
 	sprintf(msg,"Message Transmitted\r\n");
-	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY); */
+
+
 }
 
 /**
@@ -167,6 +176,7 @@ void CAN1_Rx(void)
 
 	char msg[50];
 
+	//polling method to check the status of the reception
 	//we are waiting for at least one message in to the RX FIFO0
 	while(! HAL_CAN_GetRxFifoFillLevel(&hcan1,CAN_RX_FIFO0));
 
@@ -266,6 +276,80 @@ void CAN1_Init(void)
 		Error_handler();
 	}
 }
+
+/**
+  * @brief  Transmission Mailbox 0 complete callback.
+  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified CAN.
+  * @retval None
+  */
+void HAL_CAN_TxMailbox0CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+	char msg[50];
+	sprintf(msg,"Message Transmitted:M0\r\n");
+	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
+}
+
+/**
+  * @brief  Transmission Mailbox 1 complete callback.
+  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified CAN.
+  * @retval None
+  */
+void HAL_CAN_TxMailbox1CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+	char msg[50];
+	sprintf(msg,"Message Transmitted:M1\r\n");
+	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
+}
+
+/**
+  * @brief  Transmission Mailbox 1 complete callback.
+  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified CAN.
+  * @retval None
+  */
+void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
+{
+	char msg[50];
+	sprintf(msg,"Message Transmitted:M2\r\n");
+	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
+}
+
+/**
+  * @brief  Rx FIFO 0 message pending callback.
+  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified CAN.
+  * @retval None
+  */
+void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+{
+	CAN_RxHeaderTypeDef RxHeader;
+	uint8_t rcvd_msg[5];
+	char msg[50];
+
+	if(HAL_CAN_GetRxMessage(&hcan1,CAN_RX_FIFO0,&RxHeader,rcvd_msg) != HAL_OK)
+	{
+		Error_handler();
+	}
+
+	sprintf(msg,"Message Received : %s\r\n",rcvd_msg);
+	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
+}
+
+/**
+  * @brief  Error CAN callback.
+  * @param  hcan pointer to a CAN_HandleTypeDef structure that contains
+  *         the configuration information for the specified CAN.
+  * @retval None
+  */
+void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
+{
+	char msg[50];
+	sprintf(msg,"CAN Error Detected\r\n");
+	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
+}
+
 
 /**
   * @brief  This function is executed in case of error occurrence.
