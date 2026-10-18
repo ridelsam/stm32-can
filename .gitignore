@@ -10,6 +10,7 @@
 /.aws/
 
 # Editor caches and recovery files; shared .vscode files can be tracked later
+/.vscode/c_cpp_properties.json
 /.idea/
 /.metadata/
 *.swp

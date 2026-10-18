@@ -108,6 +108,86 @@ target to run, and exits OpenOCD. It does not rebuild automatically. Note that
 the flash script takes `CONFIG` as an environment variable before the command;
 the build wrapper forwards `CONFIG=Release` after the command to Make.
 
+## Debugging with OpenOCD and GDB
+
+Run commands from the repository root. The probe must be attached to WSL as
+described above. Use the Debug build, and keep the source, ELF, and firmware
+programmed on the board in sync. Building alone does not update the board.
+
+### Terminal 1: start OpenOCD
+
+```bash
+openocd -f openocd.cfg
+```
+
+Leave this terminal running. Wait for:
+
+```text
+Listening on port 3333 for gdb connections
+```
+
+### Terminal 2: start GDB and connect
+
+```bash
+~/tools/arm-gnu-toolchain-14.2.rel1-x86_64-arm-none-eabi/bin/arm-none-eabi-gdb build/Debug/stm32-can.elf
+```
+
+If the toolchain is installed elsewhere, use `arm-none-eabi-gdb` from that
+installation's `bin` directory. Opening the ELF gives GDB symbols and source
+locations; it does not program Flash.
+
+At the `(gdb)` prompt, enter commands individually:
+
+```gdb
+target remote localhost:3333
+monitor reset halt
+break Error_handler
+tbreak main
+continue
+```
+
+`target remote` connects to OpenOCD. `monitor reset halt` resets and stops the
+MCU. `tbreak main` sets a temporary breakpoint that is removed after it is hit.
+After stopping at `main`, use `next` to execute initialization calls one at a
+time until the main loop is reached. If `Error_handler` is reached, use `bt`
+to identify the caller before resetting and losing the failure state.
+
+
+### Common commands and reconnecting
+
+| GDB command / key | Purpose |
+|---|---|
+| `Ctrl+C` | Stop the running target and return to the GDB prompt |
+| `continue` | Resume execution |
+| `next` | Execute the next source line, stepping over function calls |
+| `step` | Step into a function call |
+| `finish` | Run until the current function returns |
+| `bt` | Show the call stack |
+| `info breakpoints` | List breakpoint numbers and locations |
+| `disable N` | Disable breakpoint number N |
+| `delete N` | Remove breakpoint number N |
+| `monitor reset halt` | Reset and stop the MCU while keeping GDB connected |
+
+If `monitor` reports that it is unsupported by the target, check that OpenOCD
+is still running, then reconnect:
+
+```gdb
+target remote localhost:3333
+monitor reset halt
+```
+
+Do not create another breakpoint at the same callback on each reconnect; check
+`info breakpoints` first. A breakpoint on the repeating `while (1)` line can
+stop immediately on each `continue`; disable it before waiting for CAN traffic.
+Debugger register writes, such as enabling PA11's pull-up, are temporary and
+can be cleared by reset or overwritten by firmware initialization.
+
+To rebuild and flash using the scripts, leave GDB with `quit` (interrupt it
+first with `Ctrl+C` if running), then stop OpenOCD with `Ctrl+C` in terminal 1.
+Run `./scripts/build.sh` and `./scripts/flash.sh`, then restart both terminals'
+debug commands above. This avoids opening a second OpenOCD process against the
+same probe and reloads symbols from the newly built ELF.
+
 ## Repository layout
 
 | Path | Role |

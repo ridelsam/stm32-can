@@ -2,6 +2,7 @@
 #include "main.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 /* Private function prototypes -----------------------------------------------*/
 void GPIO_Init(void);
@@ -12,10 +13,16 @@ void CAN1_Init(void);
 void CAN1_Tx(void);
 void CAN1_Rx(void);
 void CAN_Filter_Config(void);
+void Send_response(uint32_t StdId);
+bool LED_Manage_Output(uint8_t command);
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart2;
 CAN_HandleTypeDef hcan1;
+uint8_t req_counter = 0;
+uint8_t led_no = 0;
+CAN_RxHeaderTypeDef RxHeader;
+
 
 int main(void)
 {
@@ -36,8 +43,8 @@ int main(void)
 		Error_handler();
 	}
 
-	CAN1_Tx();
-	
+	//CAN1_Tx();
+
 	//CAN1_Rx();
 
 	while(1);
@@ -132,38 +139,41 @@ void SystemClock_Config_HSE(uint8_t clock_freq)
 	HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
-/**
-  * @brief  Transmit a message via CAN1.
-  * @retval None
-  */
-void CAN1_Tx(void)
-{
-	//char msg[50];
+// /**
+//   * @brief  Transmit a message via CAN1.
+//   * @retval None
+//   */
+// void CAN1_Tx(void)
+// {
+// 	char msg[50];
 
-	CAN_TxHeaderTypeDef TxHeader;
+// 	CAN_TxHeaderTypeDef TxHeader;
 
-	uint32_t TxMailbox;
+// 	uint32_t TxMailbox;
+// 	uint8_t message;
 
-	uint8_t our_message[5] = {'H','E','L','L','O'};
+// 	uint8_t our_message[5] = {'H','E','L','L','O'};
 
-	TxHeader.DLC = 5;
-	TxHeader.StdId = 0x65D;
-	TxHeader.IDE   = CAN_ID_STD;
-	TxHeader.RTR = CAN_RTR_DATA;
+// 	TxHeader.DLC = 1;
+// 	TxHeader.StdId = 0x65D;
+// 	TxHeader.IDE   = CAN_ID_STD;
+// 	TxHeader.RTR = CAN_RTR_DATA;
 
-	if( HAL_CAN_AddTxMessage(&hcan1,&TxHeader,our_message,&TxMailbox) != HAL_OK)
-	{
-		Error_handler();
-	}
+// 	HAL_GPIO_TogglePin(GPIOA,GPIO_PIN_5);
 
-	//polling method to check the status of the transmission
-/* 	while( HAL_CAN_IsTxMessagePending(&hcan1,TxMailbox));
+// 	if( HAL_CAN_AddTxMessage(&hcan1,&TxHeader,our_message,&TxMailbox) != HAL_OK)
+// 	{
+// 		Error_handler();
+// 	}
 
-	sprintf(msg,"Message Transmitted\r\n");
-	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY); */
+// 	//polling method to check the status of the transmission
+// /* 	while( HAL_CAN_IsTxMessagePending(&hcan1,TxMailbox));
+
+// 	sprintf(msg,"Message Transmitted\r\n");
+// 	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY); */
 
 
-}
+// }
 
 /**
   * @brief  Receive a message from CAN1.
@@ -195,17 +205,18 @@ void CAN1_Rx(void)
   */
 void CAN_Filter_Config(void)
 {
-	CAN_FilterTypeDef can1_filter_init;
+	CAN_FilterTypeDef can1_filter_init = {0};
 
 	can1_filter_init.FilterActivation = ENABLE;
 	can1_filter_init.FilterBank  = 0;
 	can1_filter_init.FilterFIFOAssignment = CAN_RX_FIFO0;
 	can1_filter_init.FilterIdHigh = 0x0000;
 	can1_filter_init.FilterIdLow = 0x0000;
-	can1_filter_init.FilterMaskIdHigh = 0x0000;
+	can1_filter_init.FilterMaskIdHigh = 0X0000;
 	can1_filter_init.FilterMaskIdLow = 0x0000;
 	can1_filter_init.FilterMode = CAN_FILTERMODE_IDMASK;
 	can1_filter_init.FilterScale = CAN_FILTERSCALE_32BIT;
+	can1_filter_init.SlaveStartFilterBank = 14;
 
 	if( HAL_CAN_ConfigFilter(&hcan1,&can1_filter_init) != HAL_OK)
 	{
@@ -220,13 +231,36 @@ void CAN_Filter_Config(void)
   */
 void GPIO_Init(void)
 {
-  __HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_GPIOA_CLK_ENABLE();
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+
+
 	GPIO_InitTypeDef ledgpio;
 	ledgpio.Pin = GPIO_PIN_5;
 	ledgpio.Mode = GPIO_MODE_OUTPUT_PP;
 	ledgpio.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOA,&ledgpio);
+
+
+	ledgpio.Pin = GPIO_PIN_9 | GPIO_PIN_8 | GPIO_PIN_6;
+	ledgpio.Mode = GPIO_MODE_OUTPUT_PP;
+	ledgpio.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOC,&ledgpio);
+
+	ledgpio.Pin = GPIO_PIN_8;
+	ledgpio.Mode = GPIO_MODE_OUTPUT_PP;
+	ledgpio.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOB,&ledgpio);
+
+	ledgpio.Pin = GPIO_PIN_13;
+	ledgpio.Mode = GPIO_MODE_IT_FALLING;
+	ledgpio.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOC,&ledgpio);
+
+	HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
+
 
 /**
   * @brief USART2 Initialization Function
@@ -257,7 +291,7 @@ void UART2_Init(void)
 void CAN1_Init(void)
 {
 	hcan1.Instance = CAN1;
-	hcan1.Init.Mode = CAN_MODE_LOOPBACK;
+	hcan1.Init.Mode = CAN_MODE_NORMAL;
 	hcan1.Init.AutoBusOff = ENABLE;
 	hcan1.Init.AutoRetransmission = ENABLE;
 	hcan1.Init.AutoWakeUp = DISABLE;
@@ -268,8 +302,8 @@ void CAN1_Init(void)
 	//Settings related to CAN bit timings
 	hcan1.Init.Prescaler = 5;
 	hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-	hcan1.Init.TimeSeg1 = CAN_BS1_8TQ;
-	hcan1.Init.TimeSeg2 = CAN_BS2_1TQ;
+	hcan1.Init.TimeSeg1 = CAN_BS1_7TQ;
+	hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
 
 	if ( HAL_CAN_Init (&hcan1) != HAL_OK)
 	{
@@ -324,17 +358,85 @@ void HAL_CAN_TxMailbox2CompleteCallback(CAN_HandleTypeDef *hcan)
   */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-	CAN_RxHeaderTypeDef RxHeader;
-	uint8_t rcvd_msg[5];
+	uint8_t rcvd_msg[8];
+	
+
 	char msg[50];
 
-	if(HAL_CAN_GetRxMessage(&hcan1,CAN_RX_FIFO0,&RxHeader,rcvd_msg) != HAL_OK)
+	if(HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&RxHeader,rcvd_msg) != HAL_OK)
 	{
 		Error_handler();
 	}
 
-	sprintf(msg,"Message Received : %s\r\n",rcvd_msg);
-	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
+	if(RxHeader.StdId == 0x65D && RxHeader.IDE == CAN_ID_STD && RxHeader.RTR == CAN_RTR_DATA && RxHeader.DLC == 1 )
+	{
+		bool handled = LED_Manage_Output(rcvd_msg[0]);
+		//This is data frame sent by n1 to n2
+
+		if (handled)
+		{
+			snprintf(msg, sizeof(msg), "LED command handled: #%x\r\n",
+					(unsigned int)rcvd_msg[0]);
+		}
+		else
+		{
+			snprintf(msg, sizeof(msg), "Unsupported LED command: #%x\r\n",
+					(unsigned int)rcvd_msg[0]);
+		}
+	}
+	else if ( RxHeader.StdId == 0x651 && RxHeader.RTR == 1)
+	{
+		//This is a remote frame sent by n1 to n2
+		Send_response(RxHeader.StdId);
+		return;
+	}
+	else if ( RxHeader.StdId == 0x651 && RxHeader.RTR == 0)
+	{
+		//its a reply ( data frame) by n2 to n1
+		sprintf(msg,"Reply Received : %#X\r\n",rcvd_msg[0] << 8 | rcvd_msg[1]);
+	}else
+	{
+		return;
+	}
+
+	 HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
+}
+
+
+
+bool LED_Manage_Output(uint8_t command)
+{
+    switch (command)
+    {
+    case 0x00:
+        HAL_GPIO_WritePin(LED1_PORT, LED1_PIN_NO, GPIO_PIN_RESET);
+        return true;
+
+    case 0x01:
+        HAL_GPIO_WritePin(LED1_PORT, LED1_PIN_NO, GPIO_PIN_SET);
+        return true;
+    }
+    return false;
+}
+
+void Send_response(uint32_t StdId)
+{
+
+  CAN_TxHeaderTypeDef TxHeader;
+
+  uint32_t TxMailbox;
+
+  uint8_t response[2] = { 0xAB,0XCD};
+
+  TxHeader.DLC = 2;
+  TxHeader.StdId = StdId;
+  TxHeader.IDE   = CAN_ID_STD;
+  TxHeader.RTR = CAN_RTR_DATA;
+
+  if( HAL_CAN_AddTxMessage(&hcan1,&TxHeader,response,&TxMailbox) != HAL_OK)
+  {
+    Error_handler();
+  }
 }
 
 /**
@@ -343,12 +445,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
   *         the configuration information for the specified CAN.
   * @retval None
   */
-void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
+/* void HAL_CAN_ErrorCallback(CAN_HandleTypeDef *hcan)
 {
 	char msg[50];
 	sprintf(msg,"CAN Error Detected\r\n");
 	HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
-}
+} */
 
 
 /**

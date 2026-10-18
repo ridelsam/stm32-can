@@ -83,5 +83,3 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef *hcan)
   HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
 }
 
-
-
