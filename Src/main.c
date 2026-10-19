@@ -14,6 +14,7 @@ void CAN1_Tx(void);
 void CAN1_Rx(void);
 void CAN_Filter_Config(void);
 void Send_response(uint32_t StdId);
+HAL_StatusTypeDef CAN_SendButtonCount(uint8_t count);
 bool LED_Manage_Output(uint8_t command);
 
 /* Private variables ---------------------------------------------------------*/
@@ -22,6 +23,9 @@ CAN_HandleTypeDef hcan1;
 uint8_t req_counter = 0;
 uint8_t led_no = 0;
 CAN_RxHeaderTypeDef RxHeader;
+static volatile uint32_t button_tx_failures = 0;
+
+
 
 
 int main(void)
@@ -237,6 +241,9 @@ void GPIO_Init(void)
 
 
 	GPIO_InitTypeDef ledgpio;
+	GPIO_InitTypeDef btngpio = {0};
+
+
 	ledgpio.Pin = GPIO_PIN_5;
 	ledgpio.Mode = GPIO_MODE_OUTPUT_PP;
 	ledgpio.Pull = GPIO_NOPULL;
@@ -253,10 +260,10 @@ void GPIO_Init(void)
 	ledgpio.Pull = GPIO_NOPULL;
 	HAL_GPIO_Init(GPIOB,&ledgpio);
 
-	ledgpio.Pin = GPIO_PIN_13;
-	ledgpio.Mode = GPIO_MODE_IT_FALLING;
-	ledgpio.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(GPIOC,&ledgpio);
+	btngpio.Pin = GPIO_PIN_13;
+	btngpio.Mode = GPIO_MODE_IT_FALLING;
+	btngpio.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOC, &btngpio);
 
 	HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 }
@@ -402,7 +409,50 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 	 HAL_UART_Transmit(&huart2,(uint8_t*)msg,strlen(msg),HAL_MAX_DELAY);
 }
 
+HAL_StatusTypeDef CAN_SendButtonCount(uint8_t count)
+{
+  CAN_TxHeaderTypeDef TxHeader = {0};
+  uint8_t data[8] = {0};
+  uint32_t TxMailbox;
 
+
+  TxHeader.DLC = 1;
+  TxHeader.StdId = 0x650;
+  TxHeader.IDE   = CAN_ID_STD;
+  TxHeader.RTR = CAN_RTR_DATA;
+
+  data[0] = count;
+
+  return HAL_CAN_AddTxMessage(&hcan1,&TxHeader,data,&TxMailbox);
+}
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    static uint32_t last_press_tick = 0;
+    static bool have_previous_press = false;
+
+    if (GPIO_Pin != GPIO_PIN_13)
+    {
+        return;
+    }
+
+    uint32_t now = HAL_GetTick();
+
+    if (have_previous_press &&
+        (uint32_t)(now - last_press_tick) < 50U)
+    {
+        return;
+    }
+
+    last_press_tick = now;
+    have_previous_press = true;
+    req_counter++;
+	if (CAN_SendButtonCount(req_counter) != HAL_OK)
+	{
+		button_tx_failures++;
+	}
+
+}
 
 bool LED_Manage_Output(uint8_t command)
 {
