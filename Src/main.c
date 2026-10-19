@@ -411,19 +411,22 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
 HAL_StatusTypeDef CAN_SendButtonCount(uint8_t count)
 {
-  CAN_TxHeaderTypeDef TxHeader = {0};
-  uint8_t data[8] = {0};
-  uint32_t TxMailbox;
+	CAN_TxHeaderTypeDef TxHeader = {0};
+	uint8_t data[8] = {0};
+	uint32_t TxMailbox;
 
 
-  TxHeader.DLC = 1;
-  TxHeader.StdId = 0x650;
-  TxHeader.IDE   = CAN_ID_STD;
-  TxHeader.RTR = CAN_RTR_DATA;
+	TxHeader.DLC = 2;
+	TxHeader.StdId = 0x650;
+	TxHeader.IDE   = CAN_ID_STD;
+	TxHeader.RTR = CAN_RTR_DATA;
 
-  data[0] = count;
+	GPIO_PinState led_state =
+	HAL_GPIO_ReadPin(LED1_PORT, LED1_PIN_NO);
 
-  return HAL_CAN_AddTxMessage(&hcan1,&TxHeader,data,&TxMailbox);
+	data[0] = count;
+	data[1] = (led_state == GPIO_PIN_SET) ? 1U : 0U;
+	return HAL_CAN_AddTxMessage(&hcan1,&TxHeader,data,&TxMailbox);
 }
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
